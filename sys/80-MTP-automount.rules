@@ -1,0 +1,7 @@
+# detect usb device insertion, launch the script to test wether it's an MTP device
+# uses the gphoto2 librairie /lib/udev/rules.d/60-libgphoto2-2.rules,
+# which "tags" compatible device with "ID_GPHOTO2=1" : assign ENV{ID_GPHOTO2}="1"
+# identify the device with %E{ID_SERIAL} , unique ID. (in case several MTP devices are plugged at the same time)
+
+SUBSYSTEM=="usb", ENV{ID_GPHOTO2}=="1", ACTION=="add", RUN+="/bin/bash /home/pi/stoutette/plugMTP add %E{ID_SERIAL}"
+SUBSYSTEM=="usb", ENV{ID_GPHOTO2}=="1", ACTION=="remove", RUN+="/bin/bash /home/pi/stoutette/plugMTP remove %E{ID_SERIAL}"
