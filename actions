@@ -76,7 +76,7 @@ send2mail() {
     	filedateselect
            SUBJECT='album from stoutette'
            MESS="Title: album photo"
-	TO='blogito@meoz.fr'
+	TO="$BLOGRECEIVER"
 	sendmailattachment 
         return
         }
@@ -109,7 +109,7 @@ send2mail() {
 		#send email with rsync log
 		SUBJECT='Backup log'
 		MESS="Voici les logs du backup effectue le `date '+%d/%m/%Y,%H:%M'`"
-		sendemail  -t admin@meoz.fr -s smtp.meoz.fr -o fqdn=meoz.fr -u $SUBJECT -m $MESS -f stoutette@meoz.fr -a $RSLOG
+		sendemail  -t admin@$SMTPFQDN -s $SMTPSERVER -o fqdn=$SMTPFQDN -u $SUBJECT -m $MESS -f $SMTPSENDER -a $RSLOG
 		echo "mail with log sent"
 		toLCD "rsync log sent"
 	

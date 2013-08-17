@@ -15,21 +15,21 @@ RSIZE="1024"
 
 # email function parameters :
 	# smtp server parameters :
-		SMTPSERVER="smtp.meoz.fr"
+		SMTPSERVER="smtp.server"
 	# full domain name id necessary
-		SMTPFQDN="meoz.fr"
-	# sender name
-		SMTPSENDER="stoutette@meoz.fr"
+		SMTPFQDN="server"
+	# sender adress
+		SMTPSENDER="stoutette@server"
 	# tls option ? slows sending a lot ! (no/yes/auto)
 		SMTPTLS=no   
    # email function recipients:
-		declare -a EMAILADDRESSES=('stout@meoz.fr' 'juliaetstout@meoz.fr')
+		declare -a EMAILADDRESSES=('email@adress')
 
 # blog function parameters :
 	# blog name :
-		BLOGNAME="blogito"
+		BLOGNAME="blogname"
 	# blog email :
-		BLOGRECEIVER="blogito@meoz.fr"
+		BLOGRECEIVER="blogemailadress"
 	
 # PictBridge parameters:
 	# sx20 AUTPRINT.MRK location
