@@ -1,0 +1,60 @@
+#!/bin/bash
+#launched by udev rule when new usb devices plugged
+# $1=action $2=label, $3=fs type, $4=dev source
+
+# import variables from config file
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $SCRIPTDIR/config
+
+LOGFILE="/tmp/automountscript"
+
+# Log to file
+echo "--------------------------" >> $LOGFILE
+echo `date` >> $LOGFILE
+echo "action: $1" "label: $2" "fs_type: $3" "dev: $4" >> $LOGFILE
+
+# script
+if [ "$1" = "add" ]; then
+   echo "   adding $2" >> $LOGFILE
+
+	# Special backup devices
+	  if [ "$2" = "Free_Agent" -a "$3" = "7bc0a1f3-818a-4dd9-b6e1-a1d861981ae0" ]; then
+		# ADD CONSIGNE FROM FILE ON THE DRIVE ?
+		mkdir $BCKUPDEVICEDIR/Free_Agent
+		mount "/dev/$5"
+	# Other devices
+	  else
+		
+		echo "   new device :$2 fs: $3 loc: $4" >> $LOGFILE
+		mkdir $MOUNTDIR/$2
+		mount /dev/$4 $MOUNTDIR/$2
+	fi
+   echo "   $2 device mounted" >> $LOGFILE
+   sudo $SCRIPTDIR/python/action_arg2LCD "$2" "plugged"
+fi
+
+if [ "$1" = "remove" ]; then
+
+ echo "   removing $2" >> $LOGFILE
+        if [ "$2" = "Free_Agent" -a "$3" = "7bc0a1f3-818a-4dd9-b6e1-a1d861981ae0" ]; then
+                umount $BCKUPDEVICEDIR/Free_Agent
+		rm -r $BCKUPDEVICEDIR/Free_Agent
+
+        else
+                echo "   new device :$2" >> $LOGFILE
+                umount $MOUNTDIR/$2
+		# check if really empty
+		if [ "$(ls -A "$MOUNTDIR/$2")" ]; then
+                    echo "   directory $MOUNTDIR/$2 not Empty!" >> $LOGFILE
+                    toLCD "problem" "cannot rm dir"
+                else
+                    echo "   OK, dir $MOUNTDIR/$2 is Empty" >> $LOGFILE
+                    sudo rm -r "$MOUNTDIR/$2"
+                    toLCD "$DEVICE" "un-mounted"
+                fi
+        fi
+   echo "   $2 device un-mounted" >> $LOGFILE
+   sudo $SCRIPTDIR/python/action_arg2LCD "$2" "unplugged"
+fi
+
+	

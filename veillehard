@@ -1,0 +1,153 @@
+#!/bin/bash
+# hardware buttons definitions
+# requires
+# https://projects.drogon.net/raspberry-pi/wiringpi/the-gpio-utility/
+#
+
+# configure it depending on the pins you connected you buttons to :
+# for me :
+# 22 = def source
+# 3 = def destination
+# 27 & 17 = time selection : short press : days, long press : hours
+# 4 = short press : display actions informations / long press : go!
+# 2 = short press : resize toggle / long press : unmount usb connected devices
+#
+# 3+22 : restart script
+# 17+27 : poweroff
+
+# actions launched when PIN state changes <=> button pressed :
+# defines also buttons combinations action
+
+	press() {
+		 if [ $1 = 27 ]; then
+		 	echo ""
+			jplus
+		 fi
+                 if [ $1 = 17 ]; then
+		 	echo ""
+			jmoins
+		 fi
+                 if [ $1 = 22 ]; then
+                        echo ""
+		 	srccycle
+		 fi
+                 if [ $1 = 3 ]; then
+                        echo ""
+                        destcycle
+		 fi
+                 if [ $1 = 4 ]; then
+                        echo ""
+	                testgo
+                 fi
+                 if [ $1 = 2 ]; then
+                        echo ""
+	               resizecycle 
+                 fi
+                 return
+		}
+
+	longpress() {
+		 if [ $1 = 27 ]; then
+		 	echo ""
+			 if [ $(gpio -g read 17) = 0 ]; then
+			    #button 17 pressed down at the same time
+			    toLCD "Shutting Down..." "Bye Bye" 
+			    wait 2
+			    toLCD " - - - - - - - -" "----------------"
+			    sudo poweroff 
+			 else
+			    hplus
+			 fi
+		 fi
+                 if [ $1 = 17 ]; then
+		       echo ""
+                       if [ $(gpio -g read 27) = 0 ]; then
+                            #button 17 pressed down at the same time
+                            toLCD "Shutting Down..." "Bye Bye"
+                            wait 2
+                            toLCD "----------------" "----------------"
+		 	    sudo poweroff
+                         else
+			hmoins
+			fi
+		 fi
+                 if [ $1 = 4 ]; then
+                    echo ""
+			 docopy
+                 fi
+		 if [ $1 = 2 ]; then
+			echo ""
+			cleanunmount
+		 fi
+                 if [ $1 = 22 ]; then
+                        echo ""
+                        if [ $(gpio -g read 3) = 0 ]; then
+                                echo "restarting script"
+                                restartMAIN
+                        fi
+                        switchLCD
+                 fi
+                 if [ $1 = 3 ]; then
+                        echo ""
+                        if [ $(gpio -g read 22) = 0 ]; then
+                                echo "restarting script"
+                                restartMAIN
+                        fi
+                       showIP 
+                 fi
+                 return
+                 }
+
+
+# Creates an array with all the butons PINS
+	BUTTONARRAY=( 22 27 3 4 2 17 )
+
+# initializes the PINS
+	for PIN in "${BUTTONARRAY[@]}"; do 
+	   gpio -g mode $PIN in
+	done
+
+
+# infinite loop for button state detection, launch the press() or longpress() function
+for (( ; ; ))
+   do
+	for PIN in "${BUTTONARRAY[@]}"; do
+
+	    if [ $(gpio -g read $PIN) = 0 ]
+	    #boutton pressed
+	    	then
+
+		# long or short press ?
+			# initialize a time counter
+			PINDown=1
+
+	       		# set long press duration : "30"
+			while [ $PINDown -le 30 ]
+		   	   do
+		      	        sleep 0.01
+				# if button still pressed, time counter +1
+		      		if [ $(gpio -g read $PIN) = 0 ]; then
+		            		PINDown=$(($PINDown+1))
+					# for debbuging
+					#        echo "Pin : $PIN :  $PINDown"
+		           		# if 30 is reached, longpress it is
+		            		if [ $PINDown -eq 30 ]; then
+		                  		echo "long press on pin $PIN"
+		                  		longpress $PIN
+						PINDown=0
+						sleep 0.5
+		                  		break
+		             		fi
+
+		               # otherwise, it's a short press
+		               # breaks this loop
+		               else
+		                  echo "short press on pin $PIN"
+		                  press $PIN
+		                  sleep 0.1
+		                  break
+			       fi
+			   done
+	       fi
+	done
+   done

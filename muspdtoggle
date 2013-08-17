@@ -1,0 +1,20 @@
+#! /bin/bash
+# toggle mpd daemon on/off for remote control pb with RASPBMC
+# script launched through lirc command : cf ~/.lircrc
+
+TESTMPD=`ps -A |grep mpd`
+echo "testmpd: $TESTMPD"
+
+if [ "$TESTMPD" != "" ]; then
+		# MPD is on, switching it of
+		sudo service mpd stop
+		# TESTMPD=`ps -A |grep mpd`
+
+fi
+if [ "$TESTMPD" = "" ]; then
+		# MPD is off, switching it on
+		sudo service mpd start
+		# TESTMPD=`ps -A |grep mpd`
+fi
+exit 0
+

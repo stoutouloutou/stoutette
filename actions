@@ -1,0 +1,164 @@
+#!/bin/bash
+# misc actions : copy, resize, send to..
+
+# Resize function :
+# creates resized files in /tmp/resize
+ resize () {
+	   #remove the finished task pointer, cf function interrupt :
+           if [ -f "/tmp/stoutette_process" ]; then
+                rm /tmp/stoutette_process
+           fi
+
+           # is $FICHIERCHOISIS defined ?
+           	if [ -z "$FICHIERSCHOISIS" ]; then
+                    	filedateselect
+            	fi
+
+           # destination folder for resized files :
+          	mkdir -p $REDIMTMP
+
+           # Loop for resizing dfiles on by on, from the arrayfile
+
+		   # index to know where we are...
+		   INDEXIMG=1
+
+		   for IMG in "${ARRAYFILES[@]}"
+		      do
+			 #remove the path before the file name, for the destination file
+			 # old style FILE=`echo $IMG |sed 's,'"$MOUNTDIR"'/'"$SRCLOC"'/'',,'` 
+			 FILE=`echo ${IMG##*/}`
+
+			 # slow imagemagick convert
+			#	convert $IMG \
+			#	  -auto-orient -filter Lanczos -resize $RSIZE -quality 80 -interlace line \
+                        #  	  $REDIMTMP/small-$FILE &
+
+			# fast epeg https://github.com/mattes/epeg
+				epeg -m $RSIZE $IMG $REDIMTMP/small-$FILE &
+			
+			  echo "conversion de $FILE, fichier $INDEXIMG sur $NBFICHIERSCHOISIS" &
+			  toLCD "resizing file" "$INDEXIMG/$NBFICHIERSCHOISIS ..." 
+			  echo "finished" > /tmp/stoutette_process
+			  interupt convert 
+			  wait
+			  ((INDEXIMG++))
+		      done
+
+	    # the "convert" process can be long if many files are on the media...
+            # so it can be interupted ! cf function "interupt"
+            # this enables this function to know when the process is finished :
+            echo "finished" > /tmp/stoutette_process
+
+		    return
+		    }
+
+# fonction de nettoyage des fichiers redimensionnes
+      cleanupresize() {
+        if [ "$REDIMTMP" != "" ]; then
+		rm -r $REDIMTMP/*
+		echo "nettoyage de $REDIMTMP fait"
+	fi
+	return
+        }
+
+#fonction d'envoie par email
+send2mail() {
+           filedateselect
+	    SUBJECT="photos via stoutette"
+            MESS="Les voici !"
+	    eval TO="${1}"
+	   sendmailattachment
+           return
+           }
+
+#Send to blog function
+    send2blog() {
+    	filedateselect
+           SUBJECT='album from stoutette'
+           MESS="Title: album photo"
+	TO='blogito@meoz.fr'
+	sendmailattachment 
+        return
+        }
+
+#rsyncing backups
+	rsyncbck() {
+		RSLOG="/tmp/rslog"
+		 if [ -f $BCKUPDEVICEDIR/Free_Agent/good4sync ]; then
+			echo "launching rsync for free agent"
+			RSSOURCE="/mnt/lagon/Stout_music"
+			RSDESTIN="/mnt/Free_Agent"
+			toLCD "launching rsync"
+			sudo mount /mnt/lagon
+			rsync -rlHuhv --log-file="$RSLOG" --stats --progress --delete $RSSOURCE $RSDESTIN > /tmp/rsprog &
+			#sending partial progress to lcd :
+			RSYNCPID=`ps aux | grep -F rsync | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+			while [ "$RSYNCPID" != "" ]; do
+				tail -c 28 /tmp/rsprog | cut -c 1-17 | xargs sudo /home/pi/pitravel/FINAL/python/action_arg2LCD
+				sleep 2
+				RSYNCPID=`ps aux | grep -F rsync | grep -v -F 'grep' | awk '{ print $2 }'`
+			done &
+
+			interupt rsync
+			wait
+			echo "backup complete"
+			sudo umount /mnt/lagon
+			toLCD "Free Agent Music" "Backup Done"
+		 fi
+		
+		#send email with rsync log
+		SUBJECT='Backup log'
+		MESS="Voici les logs du backup effectue le `date '+%d/%m/%Y,%H:%M'`"
+		sendemail  -t admin@meoz.fr -s smtp.meoz.fr -o fqdn=meoz.fr -u $SUBJECT -m $MESS -f stoutette@meoz.fr -a $RSLOG
+		echo "mail with log sent"
+		toLCD "rsync log sent"
+	
+		return
+		}
+
+#classic copy
+	copy() {
+	    #empty possibly used variables
+                    unset RESIZEDFILES
+                    unset ARRAYRESIZED
+
+            # main command to choose files...
+	    filedateselect
+            echo "choosen files :"
+		for img in "${ARRAYFILES[@]}"; do echo "      $img"; done
+
+	     #taking care of resize option
+		   if [ "$RESIZE" != "NO" ]; then
+			#RESIZE option is ON !
+			resize
+			#build default  arrays with resized files + original ones
+			   RESIZEDFILES=`find /tmp/resize -type f`
+			   ARRAYRESIZED=( $RESIZEDFILES )
+			   ARRAYFILES=( "${ARRAYFILES[@]}" "${ARRAYRESIZED[@]}" )
+		   fi
+
+		   if [ "$RESIZE" = "ONLY" ]; then
+			   RESIZEDFILES=`find /tmp/resize -type f`
+			   ARRAYFILES=( "${ARRAYRESIZED[@]}" )
+		   fi
+
+
+	   # copy command, to DESTLOC/folder named by the date
+	   DATEFOLDER=`date +%Y-%m-%d_%H-%M`
+	   sudo mkdir $MOUNTDIR/$DESTLOC/$DATEFOLDER
+	   
+	   INDEXFILE=1
+           for FILE in "${ARRAYFILES[@]}"
+           do
+              echo "Copying file..." "$INDEXFILE/$NBFICHIERSCHOISIS ..."
+	      toLCD "Copying file..." "$INDEXFILE/$NBFICHIERSCHOISIS ..."
+ 	      sudo cp $FILE $MOUNTDIR/$DESTLOC/$DATEFOLDER/
+	      echo "done"
+	      ((INDEXFILE++)) 
+	   done
+	   echo "Whole copy done"
+           toLCD "Copying completed"
+	   cleanupresize
+	   return
+           }
+

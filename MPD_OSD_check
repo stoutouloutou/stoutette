@@ -1,0 +1,20 @@
+#! /bin/bash
+# defines the directory where the scripts files are:
+        SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# import the config file :
+        source $SCRIPTDIR/config
+
+# Display an OSD when the track is changed
+setNewOSD ()
+{
+  tmp=/tmp/mpd-new-track.sh
+  currentTrack=`mpc | head -1`
+  lastTrack=`cat $tmp`
+  echo "$currentTrack" > $tmp
+  [ "$currentTrack" != "$lastTrack" ] && $SCRIPTDIR/MPD_OSD_LCD&
+}
+while sleep 1
+  do
+  setNewOSD
+done

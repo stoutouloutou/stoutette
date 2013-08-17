@@ -1,0 +1,73 @@
+#!/bin/bash
+set +e
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+source $SCRIPTDIR/config
+echo "output redirected to $LOGFILE"
+
+exec > $LOGFILE 2>&1
+
+SWITCHSTATE=""
+
+# check the XBMC/stoutette switch state
+# wait until it is readable (0 or 1) <=> everything needed is loaded.
+ while [ "$SWITCHSTATE" != "0" -a "$SWITCHSTATE" != "1" ]; do
+		gpio -g mode 9 in
+		SWITCHSTATE=`gpio -g read 9`
+		echo "$SWITCHSTATE"
+		done
+
+# start the switch monitoring
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+echo "stoutettestart on `date`" 
+echo "  switchstate : `gpio -g read 9`"
+
+for (( ; ; ))
+   do
+		if [ $(gpio -g read 9) = 0 ]; then
+		# the switch is "down"
+
+				if [ "$SWITCHSTATE" != "DOWN" ]; then
+				# switch was up before
+						SWITCHSTATE=DOWN
+						echo "XBMC is running, killing it"
+						sudo $SCRIPTDIR/python/action_arg2LCD "LCDON"
+						sudo $SCRIPTDIR/python/action_arg2LCD "switching off" "xbmc"
+								XBMCPID=`ps aux | grep -F xbmc | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+								while [ "$XBMCPID" != "" ]; do
+										sudo kill $XBMCPID
+										XBMCPID=`ps aux | grep -F xbmc | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+								done
+						
+						#start pitravel script
+						$SCRIPTDIR/MAIN &
+				fi
+		else
+		# the switch is "up"
+
+				if [ "$SWITCHSTATE" != "UP" ]; then
+				# the switch was down before
+						SWITCHSTATE=UP
+						echo "switch up: xbmc on"
+						sudo $SCRIPTDIR/python/action_arg2LCD "starting xbmc"
+						# killing MAIN script
+								MAINPID=`ps aux | grep -F MAIN | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+								while [ "$MAINPID" != "" ]; do
+								sudo kill $MAINPID
+								MAINPID=`ps aux | grep -F MAIN | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+								done
+
+						#stop pitravel
+						# sudo $SCRIPTDIR/python/action_arg2LCD " : -- -- : _zzz" '  :   _ : -  '
+						su pi xbmc-standalone &
+						sleep 5
+						sudo $SCRIPTDIR/python/action_arg2LCD "LCDOFF"
+				fi
+
+		fi
+	sleep 2 
+done
+
+
+

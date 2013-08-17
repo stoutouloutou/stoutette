@@ -1,0 +1,73 @@
+# destination definition :array
+	nextdest() {
+	      # is listusb defined ?
+		 if [ -z "$NBMOUNTED" ]; then
+		       echo "premier lancement"
+		       index=0
+		       listusb
+		 else
+		       echo "pas le premier lancement"
+		       # refresh
+		       listusb
+		 fi
+
+		# is network available ?
+		ping -c1 $NETTEST > /dev/null
+		TEST=$?
+			if [ $TEST -ne 0 ]; then
+                  		echo "no network"
+                  		DESTARRAY=("${MOUNTEDARRAY[@]}")
+                  		NBDEST=${#DESTARRAY[@]}
+            		else
+                  		echo "some network"
+                  		# add network destinations
+				DESTARRAY=("$BLOGNAME" "${EMAILADDRESSES[@]}" "${MOUNTEDARRAY[@]}")
+				NBDEST=${#DESTARRAY[@]}
+        		fi
+
+        	#add backup device destination
+		if [ -d $BCKUPDEVICEDIR/Free_Agent ]; then
+				DESTARRAY=("BACKUP" "${DESTARRAY[@]}")
+				NBDEST=${#DESTARRAY[@]}
+				echo "backup destination  added"
+		fi
+
+		while ((index<$NBDEST-1)); do
+	                if [ "${DESTARRAY[$index]}" = "$DESTLOC" ]; then
+                       		((index++))
+                    		DESTLOC=${DESTARRAY[index]}
+                    		if [ -d "$MOUNTDIR/$DESTLOC" ];then
+					DESTAVAIL=`df -Ph $MOUNTDIR/$DESTLOC | awk 'NR==2 {print $4}'`
+                    			echo "la nouvelle destination est $DESTLOC avec $DESTAVAIL de libre"
+				else
+					echo "dest $DESTLOC isn't a folder, cannot compute free space"
+					DESTAVAIL=""
+				fi 
+                    		return
+                	fi
+                	  ((index++))
+            	done
+		
+	 	# index bigger than size of the array => back to 0
+	 	index=0
+	        DESTLOC=${DESTARRAY[index]}
+	        if [ -d "$MOUNTDIR/$DESTLOC" ];then
+			DESTAVAIL=`df -Ph $MOUNTDIR/$DESTLOC | awk 'NR==2 {print $4}'`
+	        	echo "la nouvelle destination est $DESTLOC avec $DESTAVAIL de libre"
+	        else
+                        echo "dest $DESTLOC isn't a folder, cannot compute free space"
+                        DESTAVAIL=""
+                fi
+		return
+    	}
+
+#find available free space on destination, return an integer (not human readable)
+intdestavail () {
+    if [ -d "$MOUNTDIR/$DESTLOC" ]; then
+       INTDESTAVAIL=`df -Pk $MOUNTDIR/$DESTLOC | awk 'NR==2 {print $4}'`
+    else
+       echo "dest $DESTLOC isn't a folder, cannot compute free space"
+       DESTAVAIL=""
+    fi
+   return
+    }

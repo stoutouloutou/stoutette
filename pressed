@@ -1,0 +1,227 @@
+# what to when buttons are pressed
+
+laps_display() {
+        if [ "$NBHEURE" != "0" -a "$NBJOUR" != "0" ]; then
+             echo "LCD : `date +%d/%m/%y,%H:%M` -"$NBJOUR"J "$NBHEURE"h"
+             toLCD "`date +%d/%m/%y\ \ %H:%M`" "-"$NBJOUR"J et "$NBHEURE"h"
+        elif [ "$NBHEURE" != "0" -a "$NBJOUR" = "0" ]; then
+            echo "LCD : `date +%d/%m/%y,%H:%M` -"$NBHEURE" heure(s)"
+            toLCD "`date +%d/%m/%y\ \ %H:%M`" "-"$NBHEURE" heure(s)"
+        elif [ "$NBHEURE" = "0" -a "$NBJOUR" != "0" ]; then
+             echo "LCD : `date +%d/%m/%y,%H:%M` -"$NBJOUR" Jour(s)"
+             toLCD "`date +%d/%m/%y\ \ %H:%M`" "-"$NBJOUR" Jour(s)"
+        else
+             # if both are 0, display "all files" (no laps defined <=> all files selected)
+             echo "LCD : `date +%d/%m/%y,%H:%M` All files"
+             toLCD "`date +%d/%m/%y\ \ %H:%M`" "All files"
+        fi
+	return
+	}
+
+jplus() {
+     # only if the display changes, redifines the date
+	     if [ "$DISPLAY" != "LAPSELECT" ]; then
+		setbestdate
+	     fi
+     # variable to know the display state
+     	DISPLAY=LAPSELECT
+     	
+     nbjourplus
+     laps_display
+     return
+     }
+
+jmoins() {
+     if [ $DISPLAY != "LAPSELECT" ]; then
+        setbestdate
+     fi
+     DISPLAY=LAPSELECT
+     nbjourmoins
+     laps_display
+     return
+     }
+
+hplus() {
+     DISPLAY=LAPSELECT
+     if [ $DISPLAY != "LAPSELECT" ]; then
+        setbestdate
+     fi
+     nbheureplus
+     laps_display
+     return
+     }
+
+hmoins() {
+     DISPLAY=LAPSELECT
+     if [ $DISPLAY != "LAPSELECT" ]; then
+        setbestdate
+     fi
+     nbheuremoins
+     laps_display
+     return
+     }
+
+srccycle() {
+    #kill possible running process
+        if [ "$RUNPID" != "" ]; then
+            kill $RUNPID
+            RUNPID=""
+        fi
+    # conditions to step forward : 
+    # display defined as SRCSEL + $SRCLOC defined !
+    # otherwise : just bring the display back with the current srcloc
+    if [ "$DISPLAY" != "SRCSEL" -a "$SRCLOC" != "" ]; then
+        echo "$SRCLOC"
+        datelastfile
+        DISPLAY=SRCSEL
+        echo "LCD : src:"$SRCLOC" `date -d @$LATESTFILEDATE +%d"/"%m"/"%y`"
+        toLCD "src:"$SRCLOC"" "`date -d @$LATESTFILEDATE +%d"/"%m"/"%y`"
+
+    else
+        DISPLAY=SRCSEL
+        nextsrc
+        datelastfile &
+            #temps de calcul long
+            echo "LCD : src:"$SRCLOC "calcul en cours" &
+            toLCD "src:"$SRCLOC"" "calcul en cours" &
+            #possible interuption of the process
+            interupt find
+            wait
+            LATESTFILEDATE=`cat /tmp/latest`
+        echo "LCD : src:"$SRCLOC" `date -d @$LATESTFILEDATE +%d"/"%m"/"%y`"
+        toLCD "src:"$SRCLOC"" "`date -d @$LATESTFILEDATE +%d"/"%m"/"%y`"
+    fi
+    return
+    }
+
+destcycle() {
+    #cycle through the array only if the LCD is already
+    #displaying DEST, and a destination is defined
+    #(not the case on the 1st time)
+    if [ "$DISPLAY" != "DESTSEL" -a "$DESTLOC" != "" ]; then
+        DISPLAY=DESTSEL
+        #don't display empty space when not avalaible
+        if [ "$DESTAVAIL" == "" ]; then
+            echo "LCD : dest:"$DESTLOC""
+            toLCD "dest:" "$DESTLOC"
+        else
+            echo "LCD : dest:"$DESTLOC" "$DESTAVAIL"" libres""
+            toLCD "dest:$DESTLOC" "$DESTAVAIL libres"
+        fi
+
+    else
+        DISPLAY=DESTSEL
+        nextdest
+        #don't display empty space when not avalaible
+        if [ "$DESTAVAIL" == "" ]; then
+           echo "LCD : dest:"$DESTLOC""
+           toLCD "dest:" "$DESTLOC"
+        else
+           echo "LCD : dest:"$DESTLOC" "$DESTAVAIL" libres"
+           toLCD "dest:"$DESTLOC"" ""$DESTAVAIL" libres"
+        fi
+    fi
+    return
+    }
+    
+docopy() {
+   DISPLAY=DOCOPY
+   toLCD "banzai !"
+    if [ "$DESTLOC" == "$BLOGNAME" ]
+       then
+	  toLCD "Sending pics" "to $BLOGNAME"
+          send2blog
+
+    # check for '@' in $DESLOC : email adress
+    elif [[ "$DESTLOC" == *@* ]]; then
+           echo "launching sen2mail command to $DESTLOC"
+	   send2mail "$DESTLOC"
+
+    elif [ "$DESTLOC" == "BACKUP" ]; then
+    	rsyncbck
+
+    else
+	# classic destination : simple copy : src to dest
+	copy
+
+    fi
+    return
+    }
+
+testgo() {
+    DISPLAY=TESTGO
+    #1st start : srcloc is empty
+    if [ "$SRCLOC" == "" ]; then
+        SRCLOC=RPi
+    fi
+    
+    if [ "$DESTLOC" == "" ]; then
+         DESTLOC="??"
+    fi
+
+    if [ "$DESTLOC" != "BACKUP" ]; then
+	    filedateselect
+	    #warning if not enough space on destination
+		intdestavail
+		
+		if [ "$INTDESTAVAIL" != "" ];then
+		   echo "$INTCHOOSENFILESSIZE" vers "$INTDESTAVAIL"
+		   if [ "$INTCHOOSENFILESSIZE" -gt "$INTDESTAVAIL" ]; then
+		       echo "not enough space on destination"
+			   SRCLOCSHORT=`echo "$SRCLOC" | cut -c 1-6`
+			   DESTLOCSHORT=`echo "$DESTLOC" | cut -c 1-6`
+		       toLCD "$SRCLOCSHORT~$DESTLOCSHORT" ""$TAILLEFICHIERSCHOISIS"!FULL"
+		       sleep 5
+		   fi
+	        fi	
+	           if [ "$RESIZE" = "NO" ]; then RESLCD=""; fi
+	           if [ "$RESIZE" = "BOTH" ]; then RESLCD=" +r"; fi
+	           if [ "$RESIZE" = "ONLY" ]; then RESLCD=" !r"; fi
+
+		   echo "toLCD : $NBFICHIERSCHOISIS fichiers soit $TAILLEFICHIERSCHOISIS"
+		   SRCLOCSHORT=`echo "$SRCLOC" | cut -c 1-6`
+		   DESTLOCSHORT=`echo "$DESTLOC" | cut -c 1-6`
+		   toLCD "$SRCLOCSHORT~$DESTLOCSHORT" "$NBFICHIERSCHOISIS files,$TAILLEFICHIERSCHOISIS$RESLCD"
+    fi
+
+    if [ "$DESTLOC" = "BACKUP" ]; then
+	echo "$BCKUPDEVICEDIR/Free_Agent"
+	 if [ -f $BCKUPDEVICEDIR/Free_Agent/good4sync ]; then
+		echo "Free agent backup time"
+		toLCD "Free agent" "Backup Zik ?"
+	 fi
+     fi
+	    return
+    }
+
+resizecycle() {
+	#switch the resize option
+	#check if the array exists
+	if [ -z "$RESIZEARRAY" ]; then
+		echo "initialize redim array"
+		RESIZEARRAY=( "NO" "BOTH" "ONLY" )
+		index=0
+	fi
+
+	while (($index<2));do
+	     if [ "${RESIZEARRAY[$index]}" = "$RESIZE" ]
+               then
+                  # still in the array, index +1 
+                  ((index++))
+                  RESIZE=${RESIZEARRAY[index]}
+                  echo "RESIZE is set to $RESIZE"
+                  toLCD "RESIZE :" "$RESIZE"
+		  return
+             fi
+             ((index++))
+          done
+
+           # the index goes beyond the size of the arrays => back to 0
+           index=0
+           RESIZE=${RESIZEARRAY[index]}
+           echo "RESIZE is ste to $RESIZE"
+           toLCD "RESIZE :" "$RESIZE"
+	return
+        }
+
+

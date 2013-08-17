@@ -1,0 +1,283 @@
+# some basic functions
+
+# send some text to the LCD : 1st arg= 1st line, 2nd arg = 2nde line
+    toLCD() {
+        sudo $SCRIPTDIR/python/action_arg2LCD "$1" "$2"
+        return
+        }
+
+# switch LCD backlight ON/OFF
+	switchLCD() {
+	   if [ "$LCDSTATUS" = "ON" ]; then
+		toLCD "LCDOFF"
+	   	LCDSTATUS=OFF
+	   else
+		toLCD "LCDON"
+	   	toLCD "stoutette" "`date +%d/%m/%y,\ \ %H:%M`"
+		LCDSTATUS=ON
+		
+	  fi
+	    return
+	   }
+
+# show IP adress
+        showIP() {
+                IPETH0=`ifconfig eth0 | grep 'inet ad'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}'`
+                IPWLAN0=`ifconfig wlan0 | grep 'inet ad'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}'`
+
+				if [ "$IPETH0" != "" ]; then
+						ETH0LCD="e$IPETH0"
+				fi
+				if [ "$IPWLAN0" != "" ]; then
+				        WLAN0LCD="w$IPWLAN0"
+				fi 
+				echo "ip adresse : "$ETH0LCD" "$WLAN0LCD""
+				toLCD "$ETH0LCD" "$WLAN0LCD"
+                DISPLAY=IP
+                return
+		}
+ 
+# list mounted dir, in an array
+	listusb() {
+	    # create an array filled whith folder name existing in $MOUNTDIR
+		MOUNTEDARRAY=( $(find $MOUNTDIR -maxdepth 1 -type d -printf '%P\n') )
+		#for debuging : display the array
+		#for dir in "${MOUNTEDARRAY[@]}"; do echo "$dir"; done
+
+	    #number of elements of this array
+		NBMOUNTED=${#MOUNTEDARRAY[@]}
+		return
+	    }
+	   
+
+#un mount usb devices
+cleanunmount() {
+	listusb
+	# remove the Rpi dir from this array : not to unmount !
+	declare -a USBMOUNTED=( "${MOUNTEDARRAY[@]/RPi/}" )
+	
+	for DEVICE in "${USBMOUNTED[@]}"; do
+		#the removed Rpi left an empty element, trying to umound it made errors
+		if [ "$DEVICE" != "" ];then
+		   echo "unmounting device $DEVICE"
+		   sudo umount "$MOUNTDIR/$DEVICE"
+			if [ "$(ls -A "$MOUNTDIR/$DEVICE")" ]; then
+			     echo "directory not Empty!"
+			     toLCD "problem" "cannot rm dir"
+			else
+			     echo "OK, dir is Empty"
+			     sudo rm -rf "$MOUNTDIR/$DEVICE"
+			     toLCD "$DEVICE" "un-mounted"
+			fi
+		fi
+		done
+		return
+		}
+
+# Select files based on their modification date :
+# find the date in epoch (seconds since 1970) from the newest file on the source $SRCLOC,
+# give the value : $LATESTFILEDATE
+     datelastfile() {
+
+           #remove the finished task pointer, cf function interrupt :
+	   if [ -f "/tmp/stoutette_process" ]; then
+		sudo rm /tmp/stoutette_process
+	   fi
+
+           # is SRCLOC defined ?
+		    if [ -z "$NBMOUNTED" ]; then
+		    	listusb
+		    fi
+            
+            # Other SRC than "classic" mounted dir :
+
+	    #   PICTBRIDGE
+            if [ "$SRCLOC" == "camera-P2B" ]; then
+                echo "taking care of pict2bridge"
+                #create an array from the file AUTPRINT.MRK
+                   MRKARRAY=( $(awk 'gsub(/.*IMG\ SRC\ \=\ \"..|\"\>.*/,"")' $AUTOPRINT) )
+                   #add location prefix to every element in the array
+                      FULLMKARRAY=""
+                      for FILE in "${MRKARRAY[@]}"; do
+                         ARRAYFILES=( "${ARRAYFILES[@]}" "$MTPPICFOLDER""$FILE" )
+                      done
+                #check date
+                LATESTFILEDATE=`stat -c "%Y" "${ARRAYFILES[@]}" | sort -r |head --lines=1`
+            
+            else
+            #  Classic mounted dir
+	    LATESTFILEDATE=`find $MOUNTDIR/$SRCLOC -type f -exec stat -c "%Y" {} + | sort -n -r |head --lines=1`
+
+            fi
+
+            echo "$LATESTFILEDATE is the date of the newest file on $SRCLOC"
+
+            #don't know why but unable tu pass this variable directly => write it down to fetch it later...
+	       sudo rm /tmp/latest
+	       echo "$LATESTFILEDATE" > /tmp/latest
+
+
+            # the "find" process can be long if many files are on the media...
+	    # so it can be interupted ! cf function "interupt"
+	    # this enables this function to know when the process is finished :
+	    echo "finished" > /tmp/stoutette_process
+
+            return
+            }
+            
+        setdatelastfile() {
+            # If no network, no ntp => set the time with the latest file.
+	    # cf next function : setbestdate
+            	sudo date -s @$LATESTFILEDATE
+            return
+           }
+
+
+	setbestdate() {
+		# If no network, no ntp => set the time with the latest file.
+		# if network is up, ifplugd should have launched ntpd so the date should be correct...
+	
+		ping -c2 "$NETTEST"
+		TEST=$?
+		if [ $TEST -ne 0 ]; then
+                	echo "network is down ?"
+                	datelastfile
+                	setdatelastfile
+                	echo "setting date from the last file on SRCLOC"
+            	else
+                	echo "network OK"
+ 		fi
+ 		return
+ 		}
+ 		
+# Simple functions tu add or substract time to variables, invoqued when the appropriate button is pressed :
+# cf veillehard for button definitions
+
+    nbjourplus() {
+            NBJOUR=$(($NBJOUR+1))
+            return
+            }
+
+    nbheureplus() {
+        NBHEURE=$(($NBHEURE+1))
+        return
+        }
+
+    nbjourmoins() {
+       if [ "$NBJOUR" -gt "0" ]; then
+            NBJOUR=$(($NBJOUR-1))
+       fi
+        return
+        }
+
+    nbheuremoins() {
+       if [ "$NBHEURE" -gt "0" ]; then
+           NBHEURE=$(($NBHEURE-1))
+       fi
+       return
+       }
+
+# function to interrupt a process passed as argument if a button is pushed
+interupt() {
+	PRNAME=`echo "$1" | cut -d ' ' -f 1`
+        #find the process PID
+        PROCESS_PID=`ps aux | grep -F $1 | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+        
+        # loops running while the process is effectively running: long process should write it down in the file
+	# /tmp/stoutette_process
+        while [ "$STATUS" != "finished" ]; do
+           if [ -f /tmp/stoutette_process ]; then
+                STATUS=`cat /tmp/stoutette_process`
+           fi
+           
+           #any button pressed kill the process
+           for PIN in "${BUTTONARRAY[@]}"; do
+           if [ $(gpio -g read $PIN) = 0 ]; then
+                  echo "va tuer $PROCESS_PID"
+                  kill "$PROCESS_PID"
+                  PROCESS_PID=""
+                  echo "finished" > /tmp/stoutette_process
+		  echo "command: $PRNAME"
+		  toLCD "cmd $PRNAME" "killed"
+		  sleep 0.4444
+           fi
+           done
+       done
+       
+       #clean up
+       sudo rm /tmp/stoutette_process
+       STATUS=""
+       return
+       }
+
+# sendemail building command
+   sendmailattachment(){
+	    #empty possibly used variables
+                    unset RESIZEDFILES
+                    unset ARRAYRESIZED
+                    unset ATTACHEDFILES
+
+            # takes care of the RESIZE option
+            # by default, resize=NO and the arrayfiles remains what it is
+
+            if [ "$RESIZE" != "NO" ]; then
+                #RESIZE option is ON !
+                resize
+                #build default  arrays with resized files + original ones
+                   RESIZEDFILES=`find /tmp/resize -type f`
+                   ARRAYRESIZED=( $RESIZEDFILES )
+                   ARRAYFILES=( "${ARRAYFILES[@]}" "${ARRAYRESIZED[@]}" )
+            fi
+
+            if [ "$RESIZE" = "ONLY" ]; then
+                   RESIZEDFILES=`find /tmp/resize -type f`
+                   ARRAYFILES=( "${ARRAYRESIZED[@]}" )
+                   MESS="$MESS"' \n Attention, seules les photos reduites sont jointes'
+            fi
+
+           #build attached files appending command
+	   for FILE in "${ARRAYFILES[@]}"
+           do
+              echo $FILE
+              ATTACHEDFILES="$ATTACHEDFILES -a $FILE"
+           done
+           echo "attachments: $ATTACHEDFILES"
+
+           toLCD "sending email to" "$TO"
+           echo "sending email to $TO ..."
+	   echo "sendemail command : sendemail -t $TO -s $SMTPSERVER -o fqdn=$SMTPFQDN -o tls=$SMTPTLS -u $SUBJECT -m $MESS -f $SMTPSENDER $ATTACHEDFILES"
+           (sendemail -t $TO -s $SMTPSERVER -o fqdn=$SMTPFQDN -o tls=$SMTPTLS -u $SUBJECT -m $MESS -f $SMTPSENDER $ATTACHEDFILES; toLCD "$NBFICHIERSCHOISIS files sent to" "$TO") &
+	   interupt sendemail
+	   wait
+	    #clean up : delete resized files :
+           cleanupresize
+
+	 return
+	 }
+
+
+# restart main script
+restartMAIN() {
+        toLCD "restarting" "script"
+	$SCRIPTDIR/MAIN > /var/log/pitravel.log & exit 0
+	return
+	}
+
+# close / start xbmc
+switchXBMC() {
+	XBMCPID=`ps aux | grep -F xbmc | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+	if [ "$XBMCPID" != "" ]; then
+		echo "XBMC is running"
+		toLCD "XBMC ON" "Killing it"
+		while [ "$XBMCPID" != "" ]; do
+		   sudo kill $XBMCPID
+		   XBMCPID=`ps aux | grep -F xbmc | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+		   done
+
+	else
+		echo "XBMX not running"
+		toLCD "XBMC OFF" "Launching it..."
+		xbmc-standalone
+	fi
+	return
+	}

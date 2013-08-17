@@ -1,0 +1,57 @@
+#!/bin/bash
+# script launched whenever a usb device is plugged (udev rule 10-MTP-plugged)
+# %1 = acttion (add/remove); %2 = device ID serial
+
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# import the config file :
+source $SCRIPTDIR/config
+
+echo "MTPplug script launched on `date`: action: $1; deviceID: $2" >> $LOGFILE
+
+if [ "$1" = "add" ]; then
+     echo "   "add" action" >> $LOGFILE
+		# camera detected by gphoto2 ?
+		CAMERA=`gphoto2 --auto-detect | grep usb | cut -c 1-16 `
+
+		if [ "$CAMERA" != "" ]; then
+			# a MTP camera is plugged !	
+			echo "     $CAMERA plugged" >> $LOGFILE
+			# LCD display of the USB camera label :
+			$SCRIPTDIR/python/action_arg2LCD "branchement" "$CAMERA"
+			###
+			### instead of the $CAMERA, better take a uniq name from UDEV $2, to remove
+			mkdir $MOUNTDIR/$2
+			gphotofs -o allow_other $MOUNTDIR/$2
+			echo "     $CAMERA mounted in $MOUNTDIR/$2" >> $LOGFILE
+
+			# if AUTPRINT.MSC is there, add a symlink folder for preselected pictures
+			ln -s $MOUNTDIR/$2 $MOUNTDIR/camera-P2B
+			if [ -r "$AUTOPRINT" ]; then
+				echo "P2B preselection detected"
+		     else
+				# no AUTOPRINT file, delete the symlink
+				rm $MOUNTDIR/camera-P2B
+			 fi
+
+		else
+		   echo "     not a gphoto2 mtp camera" >> $LOGFILE
+		fi
+
+elif [ "$1" = "remove" ]; then
+		echo "   "remove" action" >> $LOGFILE
+		# check the ID $2
+		fusermount -u $MOUNTDIR/$2
+		 # check if really empty
+		if [ "$(ls -A "$MOUNTDIR/$2")" ]; then
+				echo "     directory $MOUNTDIR/$2 not Empty!" >> $LOGFILE
+				$SCRIPTDIR/python/action_arg2LCD "problem" "cannot rm dir"
+		else
+				echo "     OK, dir $MOUNTDIR/$2 is Empty" >> $LOGFILE
+				sudo rm -r "$MOUNTDIR/$2"
+				# cut the name for the 16 character LCD
+				CAMERA=`echo $2 | cut -c 1-16`
+				$SCRIPTDIR/python/action_arg2LCD "$CAMERA" "removed"
+		fi
+		# delete symlink : no danger !
+		rm $MOUNTDIR/camera-P2B
+fi

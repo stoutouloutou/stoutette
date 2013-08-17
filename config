@@ -1,0 +1,42 @@
+#
+# defines somes variables
+# for buttons definition, see veillehard script
+
+#LOG
+LOGFILE="/tmp/stoutette"
+
+# directories
+MOUNTDIR="/media"
+BCKUPDEVICEDIR="/mnt"
+REDIMTMP="/tmp/resize"
+
+# resize function : size to resize to
+RSIZE="1024"
+
+# email function parameters :
+	# smtp server parameters :
+		SMTPSERVER="smtp.meoz.fr"
+	# full domain name id necessary
+		SMTPFQDN="meoz.fr"
+	# sender name
+		SMTPSENDER="stoutette@meoz.fr"
+	# tls option ? slows sending a lot ! (no/yes/auto)
+		SMTPTLS=no   
+   # email function recipients:
+		declare -a EMAILADDRESSES=('stout@meoz.fr' 'juliaetstout@meoz.fr')
+
+# blog function parameters :
+	# blog name :
+		BLOGNAME="blogito"
+	# blog email :
+		BLOGRECEIVER="blogito@meoz.fr"
+	
+# PictBridge parameters:
+	# sx20 AUTPRINT.MRK location
+	AUTOPRINT="/$MOUNTDIR/camera-P2B/store_00010001/MISC/AUTPRINT.MRK"
+
+	# files location
+	MTPPICFOLDER="/$MOUNTDIR/camera-P2B/store_00010001"
+
+# network test server
+	NETTEST="www.google.com"

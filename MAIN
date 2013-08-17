@@ -1,0 +1,45 @@
+#! /bin/bash
+
+#sleep 5
+
+# defines the directory where the scripts files are:
+		SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# import the config file :
+		source $SCRIPTDIR/config
+
+#defines some variables defaults
+		NBJOUR=0
+		NBHEURE=0
+		#folder for resized files
+		RESIZE=NO
+
+echo "Pitravel main script launched at `date`"
+
+# Kill XBMC if running:
+        XBMCPID=`ps aux | grep -F xbmc | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+		while [ "$XBMCPID" != "" ]; do
+				sudo kill $XBMCPID
+				XBMCPID=`ps aux | grep -F xbmc | grep -v -F 'grep' | head -1 | awk '{ print $2 }'`
+		done
+
+
+#qq fonctions de base
+	source $SCRIPTDIR/base
+#fonctions de definition de source
+	source $SCRIPTDIR/defsrc
+#fonction de definition de dest
+	source $SCRIPTDIR/defdest
+#fonctions d'action div
+	source $SCRIPTDIR/actions
+#fonctions de definition des actions a la pression d'un bouton
+	source $SCRIPTDIR/pressed
+
+toLCD "LCDON"
+LCDSTATUS=ON
+toLCD "Hello !" "`date +%d/%m/%y,\ \ %H:%M`"
+
+# start hardware buttons monitoring script
+echo "launching veillhard script" >> $LOGFILE
+	source $SCRIPTDIR/veillehard
+

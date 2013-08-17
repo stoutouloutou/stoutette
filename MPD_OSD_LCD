@@ -1,0 +1,21 @@
+#! /bin/bash
+# defines the directory where the scripts files are:
+        SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# import the config file :
+        source $SCRIPTDIR/config
+
+# to LCD function :
+# send some text to the LCD : 1st arg= 1st line, 2nd arg = 2nde line
+  toLCD() {
+        sudo $SCRIPTDIR/python/action_arg2LCD "$1" "$2"
+        return
+        }
+
+# get the current track artiste name & track name
+ARTIST=`mpc | head -n 1 | cut -f 1 -d  "-" | cut -b 1-16`
+TRACK=`mpc | head -n 1 | cut -f 2 -d  "-" | cut -b 2-17`
+
+# send thoses to LCD
+toLCD "$ARTIST" "$TRACK"
+ 

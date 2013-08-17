@@ -1,0 +1,187 @@
+# sources definition
+
+   nextsrc() {
+      # was listusb launched ?
+         if [ -z "$NBMOUNTED" ]; then
+               echo "premier lancement"
+               index=0
+               listusb
+         else
+               echo "pas le premier lancement"
+               # refresh
+               listusb
+         fi
+        
+         # if AUTPRINT.MSC is there, add "preseleced" in the array : preselected picbridge pictures
+            if [ -r $AUTOPRINT ]; then
+                SRCARRAY=("camera-P2B" "${MOUNTEDARRAY[@]}")
+                NBSRC=${#SRCARRAY[@]}
+            else
+                SRCARRAY=("${MOUNTEDARRAY[@]}")
+                NBSRC=${#SRCARRAY[@]}
+           fi
+
+         while (($index<$NBSRC-1)); do
+            if [ "${SRCARRAY[$index]}" = "$SRCLOC" ]
+               then
+                  ((index++))
+                  SRCLOC=${SRCARRAY[index]}
+                  echo "la nouvelle source est $SRCLOC"
+                  return
+             fi
+             ((index++))
+          done
+
+           # index bigger than number of elements in the arrays => 0
+           index=0
+           SRCLOC=${SRCARRAY[index]}
+           echo "la nouvelle source est $SRCLOC"
+           return
+   	}
+
+
+# select the files : array full of files, depending an the timelap chosen
+	filedateselect() {
+
+	        # is $SRCLOC defined ?
+	            if [ -z $SRCLOC ]; then
+                    	listusb
+            	    fi
+            	
+            	# Is there a LAP defined ?
+            	   if [ -z $NBJOUR ]; then
+                    	NBJOUR=0
+            	   fi
+            	   if [ -z $NBHEURE ]; then
+                    	NBHEURE=0
+            	   fi
+            	     
+       		# convert days and hours in minutes, for the find command
+            	LAPS=$((NBJOUR*60*24+NBHEURE*60))
+	        echo "laps de $LAPS"
+                    
+                # if LAP = 0 : no time restriction
+                if [ "$LAPS" == "0" ]; then
+                        echo "No lap defined, every file selected"
+                        
+                        #classic mounted dir
+                        if [ -d "$MOUNTDIR/$SRCLOC" ]; then
+                            FICHIERSCHOISIS=`find $MOUNTDIR/$SRCLOC -type f`
+                            ARRAYFILES=( $FICHIERSCHOISIS )
+                           #debug : display the array
+			   #for img in "${ARRAYFILES[@]}"; do echo "$img"; done
+
+                            #check empty array, define the wanted variables : number and sizes of files
+                            if [ ${#ARRAYFILES[@]} != "0" ]; then
+                                NBFICHIERSCHOISIS="${#ARRAYFILES[@]}"
+                                TAILLEFICHIERSCHOISIS=`find $MOUNTDIR/$SRCLOC -type f -exec du -ch '{}' +|tail -n1 |awk '{print $1}'`
+                                INTCHOOSENFILESSIZE=`find $MOUNTDIR/$SRCLOC -type f -exec du -ck '{}' +|tail -n1 |awk '{print $1}'`
+                            else
+                                echo "empty file array"
+                                NBFICHIERSCHOISIS="0"
+                                TAILLEFICHIERSCHOISIS="0Mo"
+                            fi
+
+                        fi
+
+                        #other SRC than mounted dir : PICTBRIDGE
+                        if [ "$SRCLOC" == "camera-P2B" ]; then
+                            echo "taking care of pictbridge"
+                            #create an array from the file AUTPRINT.MRK
+                                
+				MRKARRAY=( $(awk 'gsub(/.*IMG\ SRC\ \=\ \"..|\"\>.*/,"")' $AUTOPRINT) )
+		 	    #empty the array of files
+				unset ARRAYFILES
+                            #add location prefix to every element in the array
+                                for FILE in "${MRKARRAY[@]}"; do
+                                    ARRAYFILES=( "${ARRAYFILES[@]}" "$MTPPICFOLDER""$FILE" )
+                                done
+                            
+                            #test:
+                            #for img in "${ARRAYFILES[@]}"; do echo "$img"; done
+
+                            #check empty array and define the wanted variables
+                                if [ ${#ARRAYFILES[@]} != "0" ]; then
+                                   NBFICHIERSCHOISIS="${#ARRAYFILES[@]}"
+                                   TAILLEFICHIERSCHOISIS=`du -ch "${ARRAYFILES[@]}" |tail -n1 |awk '{print $1}'`
+                                   INTCHOOSENFILESSIZE=`du -ck "${ARRAYFILES[@]}" |tail -n1 |awk '{print $1}'`
+                                else
+                                   echo "empty file array"
+                                  NBFICHIERSCHOISIS="0"
+                                  TAILLEFICHIERSCHOISIS="0Mo"
+                                fi
+                        fi
+
+                else
+                # a LAP is specified : select the files modified within the LAP from the current system date
+                
+                        # define the system date
+           		setbestdate
+
+                        # find the files, different scenarios :
+                        
+                        # classic mounted dir
+                        if [ -d "$MOUNTDIR/$SRCLOC" ]; then
+                           echo "FICHIERSCHOISIS=find $MOUNTDIR/$SRCLOC -type f -mmin -$LAPS"
+                           FICHIERSCHOISIS=`find $MOUNTDIR/$SRCLOC -type f -mmin -$LAPS`
+			   ARRAYFILES=( $FICHIERSCHOISIS )
+                           
+                            # check empty array, defines the wanted results
+                            if [ ${#ARRAYFILES[@]} != "0" ]; then
+                               NBFICHIERSCHOISIS="${#ARRAYFILES[@]}"
+                               TAILLEFICHIERSCHOISIS=`find $MOUNTDIR/$SRCLOC -type f -mmin -$LAPS -exec du -ch '{}' +|tail -n1 |awk '{print $1}'`
+                               INTCHOOSENFILESSIZE=`find $MOUNTDIR/$SRCLOC -type f -mmin -$LAPS -exec du -ck '{}' +|tail -n1 |awk '{print $1}'`
+			    else
+                               echo "array vide"
+                               NBFICHIERSCHOISIS="0"
+                               TAILLEFICHIERSCHOISIS="0Mo"
+                            fi
+                           
+                         
+                         else
+                         
+                         # not a classic mounted dir
+                         
+                            # other SRC than mounted dir : PICTBRIDGE
+                       	       if [ "$SRCLOC" == "camera-P2B" ]; then
+                                  echo "taking care of pictbridge WITH LAP"
+                            	  #create an array from the file /store_00010001/MISC/AUTPRINT.MRK
+                                     MRKARRAY=( $(awk 'gsub(/.*IMG\ SRC\ \=\ \"..|\"\>.*/,"")' $AUTOPRINT) )
+                            	  #add location prefix to every element in the array
+		                     for FILE in "${MRKARRAY[@]}"; do
+		                        WHOLEARRAYFILES=( "${WHOLEARRAYFILES[@]}" "$MTPPICFOLDER""$FILE" )
+		                     done
+		                  
+		                  # compare the system date - date of each element to LAP and
+		                  # include the ones within in an array
+		                     for file in "${WHOLEARRAYFILES[@]}"; do
+		                        #calculate the lap for every file, in seconds
+		                           FILELAP=$(( `date +%s` - `stat -L --format %Y ""$file""` ))
+		                        #compare it with the predefined lap (in minutes!) include the good ones in an array
+		                           if [ $(( $FILELAP / 60 )) -le $LAPS ]; then
+		                              ARRAYFILES=( "$ARRAYFILES" "$file" )
+		                              echo "$file added to array"
+		                           fi
+		                     done
+		                     
+		                     #test:
+		                     #   for img in "${FINALARRAY[@]}"; do echo "$img"; done
+
+		                     #check empty array and define the wanted variables
+		                        if [ ${#ARRAYFILES[@]} != "0" ]; then 
+		                           NBFICHIERSCHOISIS="${#ARRAYFILES[@]}"
+		                           TAILLEFICHIERSCHOISIS=`du -ch "${ARRAYFILES[@]}" |tail -n1 |awk '{print $1}'`
+		                           INTCHOOSENFILESSIZE=`du -ck "${ARRAYFILES[@]}" |tail -n1 |awk '{print $1}'`
+					   echo " $NBFICHIERSCHOISIS fichiers, total : $TAILLEFICHIERSCHOISIS "
+		                        else
+		                           echo "empty file array"
+		                          NBFICHIERSCHOISIS="0"
+		                          TAILLEFICHIERSCHOISIS="0Mo"
+		                        fi
+                                fi
+                        fi
+                 fi
+
+		return
+		}
+
