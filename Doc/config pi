@@ -120,7 +120,7 @@ envoi de fichier par mail si reseau ?
 	smtp-cli :  http://www.logix.cz/michal/devel/smtp-cli/
 	sudo apt-get libfile-libmagic-perl libmime-lite-perl
 		#commande:
-		./smtp-cli --server=smtp.bbox.fr --from rasp@meoz.fr --to stout@meoz.fr --subject "Simple test with attachments" --body-plain "Log files are attached." --attach ~/IMG_7977.JPG
+		./smtp-cli --server=smtp.xxx.fr --from rasp@xxx.fr --to stout@xxx.fr --subject "Simple test with attachments" --body-plain "Log files are attached." --attach ~/IMG_7977.JPG
 
 
 fonction de redimensionnement
